@@ -1378,6 +1378,7 @@ class BattleSide {
     getRequestData() {
         let activeData = this.active.map(pokemon => pokemon && pokemon.getRequestData());
         if (!this.currentRequest) {
+			console.log("failure? no current request? will return forceskip: " + this.currentRequest);
             return {
                 forceskip: 'skip'
             };

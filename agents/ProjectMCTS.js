@@ -1,6 +1,10 @@
 ﻿'use strict';
 
 var Pokemon = require('../zarel/battle-engine').BattlePokemon;
+var clone = require('../clone')
+var BattleSide = require('../zarel/battle-engine').BattleSide;
+var PriorityQueue = require('priorityqueuejs');
+var util = require('util')
 
 // All Showdown AI Agents need 4 methods.
 
@@ -15,8 +19,8 @@ var Pokemon = require('../zarel/battle-engine').BattlePokemon;
 
 // All agents should also come with an assumptions object, which will guide how the InterfaceLayer deals with various aspects of hidden information.
 
-class ProjectSampleRandom {
-    constructor() { this.name = 'ProjectSampleRandom' }
+class ProjectMCTS {
+    constructor() { this.name = 'ProjectMCTS' }
 
     fetch_random_key(obj) {
         var temp_key, keys = [];
@@ -29,9 +33,66 @@ class ProjectSampleRandom {
     }
 
     decide(gameState, options, mySide) {
-        var choice = this.randomChoice(options);
+        var d = new Date();
+        var n = d.getTime(); // time when decision starts
 
-        return choice;
+        var nstate = gameState.copy(); // nstate = new state, deep copy of the current gameState to avoid making direct changes
+        nstate.p1.currentRequest = 'move';
+        nstate.p2.currentRequest = 'move';
+        nstate.me = mySide.n;
+        this.mySID = mySide.n;
+        this.mySide = mySide.id;
+
+        // not actually commented in previous code so not certain how this works but it seems to send an update to the battle state - isTerminal being if the other side has fainted and badTerminal being if their current request state is forced to switch
+        function battleSend(type, data) {
+            if (this.sides[1 - this.me].active[0].hp == 0) {
+                this.isTerminal = true;
+            }
+            else if (this.sides[1 - this.me].currentRequest == 'switch' || this.sides[this.me].active[0].hp == 0) {
+                this.badTerminal = true;
+            }
+        }
+
+        nstate.send = battleSend;
+
+        let startNode = new MCTSNode(nstate, 0, [], 0, 0);
+        let nodesInTree = [];
+        let currentNode = startNode;
+        nodesInTree.push(startNode);
+
+        // mcts process
+        while((new Date()).getTime() - n <= 15000) {
+            // selection stage
+            while(currentNode.children.length > 0){
+                currentNode = currentNode.selection(nodesInTree);
+            }
+
+            // expansion stage
+            if(currentNode.numberOfVisits !== 0 || currentNode.parent === 0){
+                let expandedNodes = currentNode.expansion(options);
+                nodesInTree.concat(expandedNodes);
+                currentNode = expandedNodes[0];
+            }
+
+            // play-out stage
+            let rolloutValue = currentNode.rollout(options);
+
+            // backpropogation stage
+            currentNode.backpropogate(rolloutValue);
+        }
+
+        let bestChoiceValue = Infinity;
+        let chosenNode = currentNode;
+
+        for(let childNode in startNode.children){
+            if(childNode.totalValue < bestChoiceValue){
+                bestChoiceValue = childNode.totalValue;
+                chosenNode = childNode;
+            }
+        }
+
+        let chosenMove = chosenNode.state.baseMove;
+        return chosenMove;
     }
 
     // A function that takes in a pokemon's name as string and level as integer, and returns a BattlePokemon object.
@@ -39,15 +100,27 @@ class ProjectSampleRandom {
     // This engine in particular assumes perfect IVs and 100 EVs across the board except for speed, with 0 moves. 
     // Other assumption systems can be used as long as they implement assume(pokemon, level)
     assumePokemon(pname, plevel, pgender, side) {
+        var template = Tools.getTemplate(pname);
         var nSet = {
             species: pname,
             name: pname,
             level: plevel,
             gender: pgender,
-            evs: { hp: 100, atk: 100, def: 100, spa: 100, spd: 100, spe: 0 },
+            evs: {
+                hp: 85,
+                atk: 85,
+                def: 85,
+                spa: 85,
+                spd: 85,
+                spe: 85
+            },
             ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
-            nature: "Hardy"
+            nature: "Hardy",
+            moves: [],
         };
+        for (var moveid in template.randomBattleMoves) {
+            nSet.moves.push(toId(template.randomBattleMoves[moveid]));
+        }
         var basePokemon = new Pokemon(nSet, side);
         // If the species only has one ability, then the pokemon's ability can only have the one ability.
         // Barring zoroark, skill swap, and role play nonsense.
@@ -67,4 +140,145 @@ class ProjectSampleRandom {
     }
 }
 
-exports.Agent = ProjectSampleRandom;
+// shoutout cs410
+class MCTSNode {
+    constructor(state, parent, children, totalValue, numberOfVisits){
+        this.state = state
+        this.parent = parent
+        this.children = children
+        this.totalValue = totalValue
+        this.numberOfVisits = numberOfVisits
+    }
+
+    calculateUCB() {
+        if(this.numberOfVisits === 0){ return Infinity }
+        
+        else {
+            let valueAverage = this.totalValue/this.numberOfVisits;
+            let tunableParam = 2;
+            
+            let rootNode = this;
+            while (rootNode.parent !== 0) {
+                rootNode = rootNode.parent;
+            }
+
+            let ucb = valueAverage + tunableParam * Math.sqrt(Math.log(rootNode.numberOfVisits)/this.numberOfVisits);
+            return ucb;
+        }
+    }
+
+    selection(nodeTree) {
+        let maxUCBVal = -Infinity;
+        let selectedNode;
+
+        for (let nextNode in nodeTree){
+            if (nextNode.parent === this){
+                let succUCB = this.calcUCB(nextNode);
+
+                if (succUCB > maxUCBVal){
+                    maxUCBVal = succUCB;
+                    selectedNode = nextNode;
+                }
+            }
+        }
+
+        return selectedNode;
+    }
+
+    // --- code from minimax agent begin --- //
+
+    getOptions(state, player) {
+        if (typeof (player) == 'string' && player.startsWith('p')) {
+            player = parseInt(player.substring(1)) - 1;
+        }
+
+        return Tools.parseRequestData(state.sides[player].getRequestData());
+    }
+
+    evaluateState(state) {
+        var myp = state.sides[state.me].active[0].hp / state.sides[state.me].active[0].maxhp;
+        var thp = state.sides[1 - state.me].active[0].hp / state.sides[1 - state.me].active[0].maxhp;
+
+        return myp - 3 * thp - 0.3 * state.turn;
+    }
+
+    getWorstOutcome(state, playerChoice, player) {
+        var nstate = state.copy();
+        var oppChoices = this.getOptions(nstate, 1 - player);
+        var worststate = null;
+        for (var choice in oppChoices) {
+            var cstate = nstate.copy();
+            cstate.choose('p' + (player + 1), playerChoice);
+            cstate.choose('p' + (1 - player + 1), choice);
+            if (worststate == null || this.evaluateState(cstate, player) < this.evaluateState(worststate, player)) {
+                worststate = cstate;
+            }
+        }
+        return worststate;
+    }
+
+    // --- code from minimax agent end --- //
+
+    nextstates(state, options){
+        let nstate = state.copy();
+        let states = [];
+
+        for (let choice in options){
+            let cstate = nstate.copy();
+            cstate.baseMove = choice;
+            let badstate = this.getWorstOutcome(cstate, choice, nstate.me);
+            if (badstate.isTerminal) {
+                return badstate.baseMove;
+            }
+            if (!badstate.badTerminal) {
+                states.push(badstate);
+            }
+        }
+
+        return states;
+    }
+
+    expansion(options) {
+        let nodeList = [];
+        let successors = this.nextstates(this.state, options);
+        
+        for (let successorState of successors){
+            let nextNode = new MCTSNode(successorState, this, [], 0, 0);
+            nodeList.push(nextNode);
+
+            this.children.push(nextNode);
+        }
+        return nodeList
+    }
+
+    rollout(options) {
+        let currentState = this.state
+        let rolloutDepth = 2;
+
+        for (let i = 0; i < rolloutDepth; i++){
+            let successors = this.nextstates(currentState, options);
+
+            if (successors.length === 0) { 
+                break; 
+            }
+
+            let choiceIndex = Math.floor(Math.random() * successors.length);
+            
+            currentState = successors[choiceIndex];
+        }
+
+        return this.evaluateState(currentState);
+    }
+
+    backpropogate(rolloutValue){
+        let currentNode = this;
+        while (true){
+            currentNode.totalValue += rolloutValue
+            currentNode.numberOfVisits += 1
+            if (currentNode.parent === 0) { break }
+            else { currentNode = currentNode.parent }
+        }
+    }
+}
+
+exports.Agent = ProjectMCTS;

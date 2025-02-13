@@ -12,6 +12,7 @@ var BFSAgent = require('./agents/BFSAgent').Agent;
 var MinimaxAgent = require('./agents/MinimaxAgent').Agent;
 var SPAgent = require('./agents/TypeSelector').Agent;
 var ProjectSampleRandom = require('./agents/ProjectSampleRandom').Agent;
+var ProjectMCTS = require('./agents/ProjectMCTS').Agent;
 var PMMAgent = require('./agents/PBFS').Agent;
 
 try {
@@ -50,7 +51,7 @@ if (online) {
     var username = 'ParentalBondBot';
     var password = 'writing coast return spent';
     // This is where you would put the formats that you are interested in having your AI participate in.
-    var formats = ['gen2ou'];
+    var formats = ['gen6random'];
     var team = "Articuno||leftovers|pressure|icebeam,hurricane,substitute,roost|Modest|252,,,252,4,||,,,30,30,|||]Ludicolo||lifeorb|swiftswim|surf,gigadrain,icebeam,raindance|Modest|4,,,252,,252|||||]Volbeat||damprock|prankster|tailglow,tackle,encore,raindance|Bold|248,,252,,8,|M||||]Seismitoad||lifeorb|swiftswim|hydropump,earthpower,stealthrock,raindance|Modest|,,,252,4,252|||||]Alomomola||damprock|regenerator|wish,protect,toxic,raindance|Bold|252,,252,,4,|||||]Armaldo||leftovers|swiftswim|xscissor,stoneedge,aquatail,rapidspin|Adamant|128,252,4,,,124|||||"
     
     // This is pretty much all netcode.  Not a ton to worry about here.
@@ -96,7 +97,7 @@ if (online) {
             console.log(data);
             var roomid = data.split("\n")[0].substring(1);
             if (battles.has(roomid) == false) {
-                battles.set(roomid, new InterfaceLayer(roomid, cuser, new WSLayer(this), new ProjectSampleRandom()));
+                battles.set(roomid, new InterfaceLayer(roomid, cuser, new WSLayer(this), new ProjectMCTS()));
                 battleCount--;
                 if (battleCount > 0) {
                     for (var format of formats) {
@@ -200,7 +201,7 @@ else {
     console.time('gametime');
     for (var i = 0; i < 15; i++) {
         var game = new OfflineGame();
-        scores.push(game.playGames(new BFSAgent(), new ProjectSampleRandom(), 1, 'competitive'));
+        scores.push(game.playGames(new BFSAgent(), new ProjectMCTS(), 1, 'competitive'));
         
     }
     console.timeEnd('gametime');
