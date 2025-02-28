@@ -6,8 +6,7 @@ var BattleSide = require('../zarel/battle-engine').BattleSide;
 var PriorityQueue = require('priorityqueuejs');
 const { start } = require('repl');
 var util = require('util')
-
-//NOTE: OLDER VERSION. MOVED TO MCTS2 TO TEST/RESOLVE ISSUES
+const fs = require('fs');
 
 // All Showdown AI Agents need 4 methods.
 
@@ -22,8 +21,8 @@ var util = require('util')
 
 // All agents should also come with an assumptions object, which will guide how the InterfaceLayer deals with various aspects of hidden information.
 
-class ProjectMCTS {
-    constructor() { this.name = 'ProjectMCTS' }
+class ProjectMCTS2 {
+    constructor() { this.name = 'ProjectMCTS2' }
 
     fetch_random_key(obj) {
         var temp_key, keys = [];
@@ -59,37 +58,50 @@ class ProjectMCTS {
 
         nstate.send = battleSend;
 
-        let startNode = new MCTSNode(nstate, 0, [], 0, 0);
+        // FILE WRITING //
+        /*
+        fs.writeFile('States.txt', util.inspect(nstate), (err) => {
+            if (err) throw err;
+        })
+        */
 
-        let nodesInTree = [];
+
+        let startNode = new MCTSNode(nstate, null, [], 0, 0);
         let currentNode = startNode;
+        let nodesInTree = [];
         nodesInTree.push(startNode);
 
         // mcts process
         while((new Date()).getTime() - n <= 15000) {
+            currentNode = startNode;
+
             // selection stage
             while(currentNode.children.length > 0){
                 currentNode = currentNode.selection(nodesInTree);
             }
 
             // expansion stage
-            if(currentNode.numberOfVisits !== 0 || currentNode.parent === 0){
+            if(currentNode.numberOfVisits !== 0 || !currentNode.parent){
                 let expandedNodes = currentNode.expansion(options);
-                nodesInTree.concat(expandedNodes);
-                currentNode = expandedNodes[0];
+
+                for(let nextExpandedNode of expandedNodes){ nodesInTree.push(nextExpandedNode); }
+                
+                if(expandedNodes.length > 0) {
+                    currentNode = expandedNodes[0]; 
+                }
             }
 
             // play-out stage
-            let rolloutValue = currentNode.rollout(options);
+            let rolloutValue = currentNode.rollout(options, mySide.id);
 
             // backpropogation stage
             currentNode.backpropogate(rolloutValue);
         }
-
+        
         let bestChoiceValue = Infinity;
         let chosenNode = currentNode;
 
-        for(let childNode in startNode.children){
+        for(let childNode of startNode.children){
             if(childNode.totalValue < bestChoiceValue){
                 bestChoiceValue = childNode.totalValue;
                 chosenNode = childNode;
@@ -97,7 +109,6 @@ class ProjectMCTS {
         }
 
         let chosenMove = chosenNode.state.baseMove;
-        console.log("I'm the final chosen node for the turn! This node involves using the move", chosenMove, "! p1 req: \x1b[30;43;1m", startNode.state.p1.currentRequest, "\x1b[0m p2 req: \x1b[30;43;1m", startNode.state.p2.currentRequest, "\x1b[0m");
         return chosenMove;
     }
 
@@ -146,7 +157,7 @@ class ProjectMCTS {
     }
 }
 
-// shoutout cs310
+// cs310 referenced
 class MCTSNode {
     constructor(state, parent, children, totalValue, numberOfVisits){
         this.state = state
@@ -164,7 +175,7 @@ class MCTSNode {
             let tunableParam = 2;
             
             let rootNode = this;
-            while (rootNode.parent !== 0) {
+            while (rootNode.parent !== null) {
                 rootNode = rootNode.parent;
             }
 
@@ -177,9 +188,9 @@ class MCTSNode {
         let maxUCBVal = -Infinity;
         let selectedNode;
 
-        for (let nextNode in nodeTree){
+        for (let nextNode of nodeTree){
             if (nextNode.parent === this){
-                let succUCB = this.calcUCB(nextNode);
+                let succUCB = nextNode.calculateUCB();
 
                 if (succUCB > maxUCBVal){
                     maxUCBVal = succUCB;
@@ -187,8 +198,7 @@ class MCTSNode {
                 }
             }
         }
-
-        console.log("I'm the node in selection! My UCB is", maxUCBVal, "! p1 req: \x1b[30;43;1m", selectedNode.state.p1.currentRequest, "\x1b[0m p2 req: \x1b[30;43;1m", selectedNode.state.p2.currentRequest, "\x1b[0m");
+        
         return selectedNode;
     }
 
@@ -209,46 +219,29 @@ class MCTSNode {
         return myp - 3 * thp - 0.3 * state.turn;
     }
 
-    getWorstOutcome(state, playerChoice, player) {
-        var nstate = state.copy();
-        console.log("state entering worstoutcome:", nstate);
-        var oppChoices = this.getOptions(nstate, 1 - player);
-        console.log("opp choices:", util.inspect(oppChoices));
-        var worststate = null;
-        console.log("empty worststate", worststate);
-        for (var choice in oppChoices) {
-            var cstate = nstate.copy();
-
-            cstate.choose('p' + (player + 1), playerChoice);
-            cstate.choose('p' + (1 - player + 1), choice);
-
-            if (worststate == null || this.evaluateState(cstate, player) < this.evaluateState(worststate, player)) {
-                worststate = cstate;
-            }
-        }
-        console.log("output worststate", worststate)
-        return worststate;
-    }
-
     // --- code from minimax agent end --- //
 
     nextstates(state, options){
         let nstate = state.copy();
+        let player = nstate.me;
         let states = [];
-
+        
+        // for every agent choice
         for (let choice in options){
             let cstate = nstate.copy();
-            cstate.baseMove = choice;
-            let badstate = this.getWorstOutcome(cstate, choice, nstate.me);
-            console.log(badstate);
-            if (badstate.isTerminal) {
-                return badstate.baseMove;
-            }
-            if (!badstate.badTerminal) {
-                states.push(badstate);
+            cstate.choose('p' + (player + 1), choice);
+
+            // for every opponent choice
+            var oppChoices = this.getOptions(cstate, 1 - player);
+            for (let oppChoice in oppChoices){
+                let oppstate = nstate.copy();
+                oppstate.choose('p' + (1 - player + 1), oppChoice);
+
+                if(cstate){
+                    states.push(oppstate);
+                }
             }
         }
-
         return states;
     }
 
@@ -265,20 +258,22 @@ class MCTSNode {
         return nodeList
     }
 
-    rollout(options) {
+    rollout(options, sideID){
         let currentState = this.state
+        let currentOptions = options;
         let rolloutDepth = 2;
 
         for (let i = 0; i < rolloutDepth; i++){
-            let successors = this.nextstates(currentState, options);
-
-            if (successors.length === 0) { 
-                break; 
-            }
+            let successors = this.nextstates(currentState, currentOptions);
 
             let choiceIndex = Math.floor(Math.random() * successors.length);
-            
             currentState = successors[choiceIndex];
+            
+            currentOptions = this.getOptions(currentState, sideID)
+
+            if(currentState.isTerminal){
+                break;
+            }
         }
 
         return this.evaluateState(currentState);
@@ -289,10 +284,10 @@ class MCTSNode {
         while (true){
             currentNode.totalValue += rolloutValue
             currentNode.numberOfVisits += 1
-            if (currentNode.parent === 0) { break }
+            if (currentNode.parent === null) { break }
             else { currentNode = currentNode.parent }
         }
     }
 }
 
-exports.Agent = ProjectMCTS;
+exports.Agent = ProjectMCTS2;

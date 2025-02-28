@@ -13,6 +13,7 @@ var MinimaxAgent = require('./agents/MinimaxAgent').Agent;
 var SPAgent = require('./agents/TypeSelector').Agent;
 var ProjectSampleRandom = require('./agents/ProjectSampleRandom').Agent;
 var ProjectMCTS = require('./agents/ProjectMCTS').Agent;
+var ProjectMCTS2 = require('./agents/ProjectMCTS2').Agent;
 var PMMAgent = require('./agents/PBFS').Agent;
 
 try {
@@ -97,7 +98,7 @@ if (online) {
             console.log(data);
             var roomid = data.split("\n")[0].substring(1);
             if (battles.has(roomid) == false) {
-                battles.set(roomid, new InterfaceLayer(roomid, cuser, new WSLayer(this), new ProjectMCTS()));
+                battles.set(roomid, new InterfaceLayer(roomid, cuser, new WSLayer(this), new ProjectMCTS2()));
                 battleCount--;
                 if (battleCount > 0) {
                     for (var format of formats) {
@@ -201,7 +202,7 @@ else {
     console.time('gametime');
     for (var i = 0; i < 15; i++) {
         var game = new OfflineGame();
-        scores.push(game.playGames(new BFSAgent(), new ProjectMCTS(), 1, 'competitive'));
+        scores.push(game.playGames(new BFSAgent(), new ProjectMCTS2(), 1, 'competitive'));
         
     }
     console.timeEnd('gametime');
