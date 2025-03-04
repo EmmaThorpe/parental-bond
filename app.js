@@ -202,7 +202,7 @@ else {
     console.time('gametime');
     for (var i = 0; i < 15; i++) {
         var game = new OfflineGame();
-        scores.push(game.playGames(new BFSAgent(), new ProjectMCTS2(), 1, 'competitive'));
+        scores.push(game.playGames(new OTLAgent(), new ProjectMCTS2(), 1, 'competitive'));
         
     }
     console.timeEnd('gametime');
