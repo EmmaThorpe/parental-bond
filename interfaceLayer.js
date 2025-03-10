@@ -296,6 +296,14 @@ class InterfaceLayer {
         else if (tag == 'tier') {
             this.format = arr[2];
         }
+        else if (tag == 'teamsize') {
+            let player = arr[2];
+
+            if (this.mySide == player) { this.battle.sides[this.mySID].pokemonLeft = parseInt(arr[3]); }
+            else { this.battle.sides[1 - this.mySID].pokemonLeft = parseInt(arr[3]); }
+
+            console.log("teamsize checker", arr[2], arr[3], this.battle.sides[this.mySID].pokemonLeft)
+        }
         else if (tag == "request") {
             // for whatever reason they now send an empty request upon acceptinga challenge and you have to parse out the rest of the stuff in various other tags, so anything involving the first turn here is no longer relevant anyways
             if(arr[2]){

@@ -58,36 +58,13 @@ class ProjectMCTS2 {
 
         nstate.send = battleSend;
 
-        // FILE WRITING //
-        fs.unlinkSync('States.txt', (err) => {
-            if (err) throw err;
-        })
-
-        fs.unlinkSync('123.txt', (err) => {
-            if (err) throw err;
-        })
-
-        fs.writeFileSync('States.txt', "INITIAL STATE:\n", (err) => {
-            if (err) throw err;
-        })
-        
-        fs.appendFileSync('States.txt', util.inspect(nstate), (err) => {
-            if (err) throw err;
-        })
-
-        fs.appendFileSync('States.txt', "\n\n--------------------------------------\n\n", (err) => {
-            if (err) throw err;
-        })
-        
-
-
         let startNode = new MCTSNode(nstate, null, [], 0, 0);
         let currentNode = startNode;
         let nodesInTree = [];
         nodesInTree.push(startNode);
 
         // mcts process
-        while((new Date()).getTime() - n <= 15000) {
+        while((new Date()).getTime() - n <= 19000) {
             currentNode = startNode;
 
             // selection stage
@@ -239,10 +216,6 @@ class MCTSNode {
     // --- code from minimax agent end --- //
 
     nextstates(state, options){
-        fs.appendFileSync('123.txt', "\n\n\n START OF NEXTSTATES:\n", (err) => {
-            if (err) throw err;
-        })
-
         let nstate = state.copy();
         let player = nstate.me;
         let states = [];
@@ -253,25 +226,9 @@ class MCTSNode {
             var oppChoices = this.getOptions(nstate, 1 - player);
             for (let oppChoice in oppChoices){
                 let cstate = nstate.copy();
-
-                fs.appendFileSync('123.txt', "\nBEFORE:\n", (err) => {
-                    if (err) throw err;
-                })
-
-                fs.appendFileSync('123.txt', util.inspect(cstate), (err) => {
-                    if (err) throw err;
-                })
                 
                 cstate.choose('p' + (1 - player + 1), oppChoice);
                 cstate.choose('p' + (player + 1), choice);
-
-                fs.appendFileSync('123.txt', "\nAFTER:\n", (err) => {
-                    if (err) throw err;
-                })
-
-                fs.appendFileSync('123.txt', util.inspect(cstate), (err) => {
-                    if (err) throw err;
-                })
                 
                 if(cstate){
                     states.push(cstate);
@@ -299,35 +256,16 @@ class MCTSNode {
         let initialState = this.state;
         let currentState = this.state;
         let currentOptions = options;
-        let rolloutDepth = 2;
+        let rolloutDepth = 3;
 
         for (let i = 0; i < rolloutDepth; i++){
-            if(!currentState.isTerminal){
-                let successors = this.nextstates(currentState, currentOptions);
+            let successors = this.nextstates(currentState, currentOptions);
 
-                let choiceIndex = Math.floor(Math.random() * successors.length);
-                currentState = successors[choiceIndex];
+            let choiceIndex = Math.floor(Math.random() * successors.length);
+            currentState = successors[choiceIndex];
 
-
-                fs.appendFileSync('States.txt', "NEXT CHOSEN ROLLOUT STATE:\n", (err) => {
-                    if (err) throw err;
-                })
-                
-                fs.appendFileSync('States.txt', util.inspect(currentState), (err) => {
-                    if (err) throw err;
-                })
-        
-                fs.appendFileSync('States.txt', "\n\n--------------------------------------\n\n", (err) => {
-                    if (err) throw err;
-                })
-
-                
-                currentOptions = this.getOptions(currentState, sideID)
-
-            }
-            else{
-                break;
-            }
+            if(currentState.isTerminal || currentState.badTerminal){ break; }
+            currentOptions = this.getOptions(currentState, sideID);
         }
 
         return this.evaluateState(currentState);
