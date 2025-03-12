@@ -35,6 +35,11 @@ class ProjectMCTS2 {
     }
 
     decide(gameState, options, mySide) {
+        
+        fs.unlinkSync('States.txt', (err) => {
+            if (err) throw err;
+        })
+
         var d = new Date();
         var n = d.getTime(); // time when decision starts
 
@@ -64,7 +69,7 @@ class ProjectMCTS2 {
         nodesInTree.push(startNode);
 
         // mcts process
-        while((new Date()).getTime() - n <= 19000) {
+        while((new Date()).getTime() - n <= 100000) {
             currentNode = startNode;
 
             // selection stage
@@ -219,22 +224,44 @@ class MCTSNode {
         let nstate = state.copy();
         let player = nstate.me;
         let states = [];
-        
+
+        console.log("player options", options);
         // for every agent choice
         for (let choice in options){
             // for every opponent choice
-            var oppChoices = this.getOptions(nstate, 1 - player);
+            let oppChoices = this.getOptions(nstate, 1 - player);
+
+            console.log("opp choices", oppChoices);
             for (let oppChoice in oppChoices){
                 let cstate = nstate.copy();
                 
                 cstate.choose('p' + (1 - player + 1), oppChoice);
                 cstate.choose('p' + (player + 1), choice);
+
+                let progressedstate = cstate;
                 
-                if(cstate){
-                    states.push(cstate);
+                // if either player still has more to do, do it
+                while(progressedstate.sides[player].currentRequest === "switch" || progressedstate.sides[1 - player].currentRequest === "switch"){
+                    if(progressedstate.sides[player].currentRequest === "switch"){
+                        let switchChoices = this.getOptions(progressedstate, player);
+                        for(let switchChoice in switchChoices){
+                            progressedstate.choose('p' + (player + 1), switchChoice);
+                            progressedstate.choose('p' + (1 - player + 1), 'forceskip');
+                        }
+                    }
+                    else if(progressedstate.sides[1 - player].currentRequest === "switch"){
+                        let switchChoices = this.getOptions(progressedstate, 1 - player);
+                        for(let switchChoice in switchChoices){
+                            progressedstate.choose('p' + (player + 1), 'forceskip');
+                            progressedstate.choose('p' + (1 - player + 1), switchChoice);
+                        }
+                    }
                 }
+
+                states.push(progressedstate);
             }
         }
+
         return states;
     }
 
@@ -259,13 +286,49 @@ class MCTSNode {
         let rolloutDepth = 3;
 
         for (let i = 0; i < rolloutDepth; i++){
-            let successors = this.nextstates(currentState, currentOptions);
 
+            fs.appendFileSync('States.txt', "\n\n\nCURRENT STATE BEFORE SUCCESSORS:\n", (err) => {
+                if (err) throw err;
+            })
+            
+            fs.appendFileSync('States.txt', util.inspect(currentState), (err) => {
+                if (err) throw err;
+            })
+    
+            fs.appendFileSync('States.txt', "\n\n--------------------------------------\n\n", (err) => {
+                if (err) throw err;
+            })
+            currentOptions = this.getOptions(currentState, sideID);
+            let successors = this.nextstates(currentState, currentOptions);
             let choiceIndex = Math.floor(Math.random() * successors.length);
+
+            fs.appendFileSync('States.txt', "\nChoice index:\n", (err) => {
+                if (err) throw err;
+            })
+
+            fs.appendFileSync('States.txt', toString(choiceIndex), (err) => {
+                if (err) throw err;
+            })
+
             currentState = successors[choiceIndex];
+            fs.appendFileSync('States.txt', "\n\n--------------------------------------\n\n", (err) => {
+                if (err) throw err;
+            })
+            
+            fs.appendFileSync('States.txt', "NEXT CHOSEN ROLLOUT STATE:\n", (err) => {
+                if (err) throw err;
+            })
+            
+            fs.appendFileSync('States.txt', util.inspect(currentState), (err) => {
+                if (err) throw err;
+            })
+    
+            fs.appendFileSync('States.txt', "\n\n--------------------------------------\n\n", (err) => {
+                if (err) throw err;
+            })
+
 
             if(currentState.isTerminal || currentState.badTerminal){ break; }
-            currentOptions = this.getOptions(currentState, sideID);
         }
 
         return this.evaluateState(currentState);
