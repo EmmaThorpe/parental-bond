@@ -1182,8 +1182,15 @@ module.exports = (() => {
         if (typeof (requestData) == 'string') { requestData = JSON.parse(request); }
         var cTurnOptions = {};
         if (requestData['active']) {
+			console.log("how many moves", requestData['active'][0]['moves'].length)
             for (var i = 0; i < requestData['active'][0]['moves'].length; i++) {
-                if (requestData['active'][0]['moves'][i]['disabled'] == false && requestData['active'][0]['moves'][i].pp > 0) {
+				
+				// case for if we only have a single option and it's not holding all the data (e.g. outrage)
+                if(requestData['active'][0]['moves'].length === 1 && !requestData['active'][0]['moves'][0].hasOwnProperty("disabled")){
+					cTurnOptions['move ' + requestData['active'][0]['moves'][i].id] = requestData['active'][0]['moves'][i];
+				}
+				
+				else if (requestData['active'][0]['moves'][i]['disabled'] == false && requestData['active'][0]['moves'][i].pp > 0) {
                     cTurnOptions['move ' + requestData['active'][0]['moves'][i].id] = requestData['active'][0]['moves'][i];
                 }
             }
@@ -1198,6 +1205,7 @@ module.exports = (() => {
             }
         }
         for (var option in cTurnOptions) {
+			console.log("adding option", option)
             cTurnOptions[option].choice = option;
         }
         return cTurnOptions;

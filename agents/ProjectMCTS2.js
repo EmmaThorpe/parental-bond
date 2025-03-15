@@ -206,6 +206,8 @@ class MCTSNode {
             player = parseInt(player.substring(1)) - 1;
         }
 
+        console.log("request data", util.inspect(state.sides[player].getRequestData()));
+
         return Tools.parseRequestData(state.sides[player].getRequestData());
     }
 
@@ -226,39 +228,48 @@ class MCTSNode {
         let states = [];
 
         console.log("player options", options);
-        // for every agent choice
-        for (let choice in options){
-            // for every opponent choice
-            let oppChoices = this.getOptions(nstate, 1 - player);
 
-            console.log("opp choices", oppChoices);
-            for (let oppChoice in oppChoices){
+        if(nstate.sides[player].currentRequest === "switch"){
+            for(let switchChoice in options){
                 let cstate = nstate.copy();
-                
-                cstate.choose('p' + (1 - player + 1), oppChoice);
-                cstate.choose('p' + (player + 1), choice);
 
-                let progressedstate = cstate;
+                cstate.choose('p' + (player + 1), switchChoice);
+                cstate.choose('p' + (1 - player + 1), 'forceskip');
                 
-                // if either player still has more to do, do it
-                while(progressedstate.sides[player].currentRequest === "switch" || progressedstate.sides[1 - player].currentRequest === "switch"){
-                    if(progressedstate.sides[player].currentRequest === "switch"){
-                        let switchChoices = this.getOptions(progressedstate, player);
-                        for(let switchChoice in switchChoices){
-                            progressedstate.choose('p' + (player + 1), switchChoice);
-                            progressedstate.choose('p' + (1 - player + 1), 'forceskip');
-                        }
-                    }
-                    else if(progressedstate.sides[1 - player].currentRequest === "switch"){
-                        let switchChoices = this.getOptions(progressedstate, 1 - player);
-                        for(let switchChoice in switchChoices){
-                            progressedstate.choose('p' + (player + 1), 'forceskip');
-                            progressedstate.choose('p' + (1 - player + 1), switchChoice);
-                        }
+                if(cstate){
+                    states.push(cstate);
+                }
+            }
+        }
+        else if(nstate.sides[1 - player].currentRequest === "switch"){
+            let switchChoices = this.getOptions(nstate, 1 - player);
+            for(let switchChoice in switchChoices){
+                let cstate = nstate.copy();
+
+                cstate.choose('p' + (player + 1), 'forceskip');
+                cstate.choose('p' + (1 - player + 1), switchChoice);
+
+                if(cstate){
+                    states.push(cstate);
+                }
+            }
+        }
+        else{
+            for (let choice in options){
+                let oppChoices = this.getOptions(nstate, 1 - player);
+    
+                console.log("opp choices", oppChoices);
+    
+                for (let oppChoice in oppChoices){
+                    let cstate = nstate.copy();
+                    
+                    cstate.choose('p' + (1 - player + 1), oppChoice);
+                    cstate.choose('p' + (player + 1), choice);
+    
+                    if(cstate){
+                        states.push(cstate);
                     }
                 }
-
-                states.push(progressedstate);
             }
         }
 
@@ -286,6 +297,7 @@ class MCTSNode {
         let rolloutDepth = 3;
 
         for (let i = 0; i < rolloutDepth; i++){
+            if(currentState.isTerminal || currentState.badTerminal || currentState.hasOwnProperty("winner")){ break; }
 
             fs.appendFileSync('States.txt', "\n\n\nCURRENT STATE BEFORE SUCCESSORS:\n", (err) => {
                 if (err) throw err;
@@ -326,9 +338,6 @@ class MCTSNode {
             fs.appendFileSync('States.txt', "\n\n--------------------------------------\n\n", (err) => {
                 if (err) throw err;
             })
-
-
-            if(currentState.isTerminal || currentState.badTerminal){ break; }
         }
 
         return this.evaluateState(currentState);
