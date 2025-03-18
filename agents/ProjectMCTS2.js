@@ -35,11 +35,6 @@ class ProjectMCTS2 {
     }
 
     decide(gameState, options, mySide) {
-        
-        fs.unlinkSync('States.txt', (err) => {
-            if (err) throw err;
-        })
-
         var d = new Date();
         var n = d.getTime(); // time when decision starts
 
@@ -299,45 +294,11 @@ class MCTSNode {
         for (let i = 0; i < rolloutDepth; i++){
             if(currentState.isTerminal || currentState.badTerminal || currentState.hasOwnProperty("winner")){ break; }
 
-            fs.appendFileSync('States.txt', "\n\n\nCURRENT STATE BEFORE SUCCESSORS:\n", (err) => {
-                if (err) throw err;
-            })
-            
-            fs.appendFileSync('States.txt', util.inspect(currentState), (err) => {
-                if (err) throw err;
-            })
-    
-            fs.appendFileSync('States.txt', "\n\n--------------------------------------\n\n", (err) => {
-                if (err) throw err;
-            })
             currentOptions = this.getOptions(currentState, sideID);
             let successors = this.nextstates(currentState, currentOptions);
             let choiceIndex = Math.floor(Math.random() * successors.length);
 
-            fs.appendFileSync('States.txt', "\nChoice index:\n", (err) => {
-                if (err) throw err;
-            })
-
-            fs.appendFileSync('States.txt', toString(choiceIndex), (err) => {
-                if (err) throw err;
-            })
-
             currentState = successors[choiceIndex];
-            fs.appendFileSync('States.txt', "\n\n--------------------------------------\n\n", (err) => {
-                if (err) throw err;
-            })
-            
-            fs.appendFileSync('States.txt', "NEXT CHOSEN ROLLOUT STATE:\n", (err) => {
-                if (err) throw err;
-            })
-            
-            fs.appendFileSync('States.txt', util.inspect(currentState), (err) => {
-                if (err) throw err;
-            })
-    
-            fs.appendFileSync('States.txt', "\n\n--------------------------------------\n\n", (err) => {
-                if (err) throw err;
-            })
         }
 
         return this.evaluateState(currentState);
