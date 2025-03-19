@@ -52,8 +52,9 @@ if (online) {
     var username = 'ParentalBondBot';
     var password = 'writing coast return spent';
     // This is where you would put the formats that you are interested in having your AI participate in.
-    var formats = ['gen6random'];
-    var team = "Articuno||leftovers|pressure|icebeam,hurricane,substitute,roost|Modest|252,,,252,4,||,,,30,30,|||]Ludicolo||lifeorb|swiftswim|surf,gigadrain,icebeam,raindance|Modest|4,,,252,,252|||||]Volbeat||damprock|prankster|tailglow,tackle,encore,raindance|Bold|248,,252,,8,|M||||]Seismitoad||lifeorb|swiftswim|hydropump,earthpower,stealthrock,raindance|Modest|,,,252,4,252|||||]Alomomola||damprock|regenerator|wish,protect,toxic,raindance|Bold|252,,252,,4,|||||]Armaldo||leftovers|swiftswim|xscissor,stoneedge,aquatail,rapidspin|Adamant|128,252,4,,,124|||||"
+    var formats = ['gen4ou'];
+    // var team = "Articuno||leftovers|pressure|icebeam,hurricane,substitute,roost|Modest|252,,,252,4,||,,,30,30,|||]Ludicolo||lifeorb|swiftswim|surf,gigadrain,icebeam,raindance|Modest|4,,,252,,252|||||]Volbeat||damprock|prankster|tailglow,tackle,encore,raindance|Bold|248,,252,,8,|M||||]Seismitoad||lifeorb|swiftswim|hydropump,earthpower,stealthrock,raindance|Modest|,,,252,4,252|||||]Alomomola||damprock|regenerator|wish,protect,toxic,raindance|Bold|252,,252,,4,|||||]Armaldo||leftovers|swiftswim|xscissor,stoneedge,aquatail,rapidspin|Adamant|128,252,4,,,124|||||"
+    var team = "Clefairy||leftovers|cutecharm|encore,followme,metronome,solarbeam|Impish|252,4,252,,,|||||"
     
     // This is pretty much all netcode.  Not a ton to worry about here.
     var battles = new hashmap.HashMap();
@@ -202,7 +203,7 @@ else {
     console.time('gametime');
     for (var i = 0; i < 15; i++) {
         var game = new OfflineGame();
-        scores.push(game.playGames(new OTLAgent(), new ProjectMCTS2(), 1, 'competitive'));
+        scores.push(game.playGames(new OTLAgent(), new ProjectMCTS2(), 1, 'gen6random'));
         
     }
     console.timeEnd('gametime');

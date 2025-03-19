@@ -17,6 +17,7 @@ class InterfaceLayer {
         this.format = '';
         // Because apparently, when zoroark is active, the server lies to everyone
         this.zoroarkActive = false;
+        this.oppLastChoice = ''
     }
 
     fetch_random_key(obj) {
@@ -357,7 +358,7 @@ class InterfaceLayer {
                 }
                 if (requestData['forceSwitch'] && requestData['forceSwitch'][0]) {
                     var choice = '';
-                    choice = this.agent.decide(this.battle, this.cTurnOptions, this.battle.sides[this.mySID], true);
+                    choice = this.agent.decide(this.battle, this.cTurnOptions, this.battle.sides[this.mySID], this.oppLastChoice, true);
                     if (!choice || !this.cTurnOptions[choice]) {
                         choice = this.fetch_random_key(this.cTurnOptions);
                     }
@@ -393,6 +394,7 @@ class InterfaceLayer {
                     if (pName == this.battle.sides[1 - this.mySID].pokemon[i].species) {
                         this.runExternalSwitch(this.battle.sides[1 - this.mySID].pokemon[i], 0);
                         found = true;
+                        this.oppLastChoice = "switch " + i;
                         break;
                     }
                 }
@@ -414,6 +416,8 @@ class InterfaceLayer {
                     npoke.position = this.battle.sides[1 - this.mySID].pokemon.length;
                     this.battle.sides[1 - this.mySID].pokemon.push(npoke);
                     this.runExternalSwitch(npoke, 0);
+
+                    this.oppLastChoice = "switch " + npoke.position;
                 }
             }
         }
@@ -483,7 +487,7 @@ class InterfaceLayer {
                 choice = 'move 1';
             }
             else {
-                choice = this.agent.decide(this.battle, this.cTurnOptions, this.battle.sides[this.mySID]);
+                choice = this.agent.decide(this.battle, this.cTurnOptions, this.battle.sides[this.mySID],  this.oppLastChoice,);
                 if (!choice || !this.cTurnOptions[choice]) {
                     choice = this.fetch_random_key(this.cTurnOptions);
                 }
@@ -496,7 +500,7 @@ class InterfaceLayer {
                 // So this is where things get complicated.  maybetrapped means that something caused the opponent to be trapped
                 // callback can confirm that they are trapped, but this doesnt tell us anything conclusive.
                 // There's a specific confluence of events wherein a trapped callback reveals the ability of the opponent.
-                this.cLayer.send(this.id + '|/choose ' + this.agent.decide(this.battle, this.cTurnMoves, this.battle.sides[this.mySID]), this.mySide);
+                this.cLayer.send(this.id + '|/choose ' + this.agent.decide(this.battle, this.cTurnMoves, this.battle.sides[this.mySID]), this.mySide,  this.oppLastChoice);
             }
         }
         else if (tag == 'move') {
@@ -512,6 +516,7 @@ class InterfaceLayer {
             if (!arr[2].startsWith(this.mySide)) {
                 this.runExternalAddMove(this.battle.sides[1 - this.mySID].active[0], arr[3]);
                 this.battle.sides[1 - this.mySID].active[0].lastMove = this.battle.getMove(arr[3]).id;
+                this.oppLastChoice = "move " + this.battle.sides[1 - this.mySID].active[0].lastMove;
             }
             else {
                 this.battle.sides[this.mySID].active[0].lastMove = this.battle.getMove(arr[3]).id;

@@ -22,7 +22,10 @@ const fs = require('fs');
 // All agents should also come with an assumptions object, which will guide how the InterfaceLayer deals with various aspects of hidden information.
 
 class ProjectMCTS2 {
-    constructor() { this.name = 'ProjectMCTS2' }
+    constructor() { 
+        this.name = 'ProjectMCTS2';
+        this.oppLastChoiceValues = null;
+     }
 
     fetch_random_key(obj) {
         var temp_key, keys = [];
@@ -34,7 +37,9 @@ class ProjectMCTS2 {
         return keys[Math.floor(Math.random() * keys.length)];
     }
 
-    decide(gameState, options, mySide) {
+    decide(gameState, options, mySide, oppLastChoice) {
+        console.log("the next set of choice values in:", util.inspect(this.oppLastChoiceValues));
+
         var d = new Date();
         var n = d.getTime(); // time when decision starts
 
@@ -58,7 +63,7 @@ class ProjectMCTS2 {
 
         nstate.send = battleSend;
 
-        let startNode = new MCTSNode(nstate, null, [], 0, 0);
+        let startNode = new MCTSNode(nstate, null, null, [], 0, 0, 0);
         let currentNode = startNode;
         let nodesInTree = [];
         nodesInTree.push(startNode);
@@ -84,23 +89,46 @@ class ProjectMCTS2 {
             }
 
             // play-out stage
-            let rolloutValue = currentNode.rollout(options, mySide.id);
+            let rolloutreturn = currentNode.rollout(options, mySide.id);
+            let rolloutValue = rolloutreturn[0];
+            let oppRolloutValue = rolloutreturn[1];
 
             // backpropogation stage
-            currentNode.backpropogate(rolloutValue);
+            currentNode.backpropogate(rolloutValue, oppRolloutValue);
         }
         
         let bestChoiceValue = Infinity;
         let chosenNode = currentNode;
+        let opponentChoiceValues = new Map();
+
+        if(this.oppLastChoiceValues !== null && oppLastChoice !== null){
+            console.log(oppLastChoice, "\n", util.inspect(this.oppLastChoiceValues));
+        }
 
         for(let childNode of startNode.children){
+            // pick the move using node values
             if(childNode.totalValue < bestChoiceValue){
                 bestChoiceValue = childNode.totalValue;
                 chosenNode = childNode;
             }
+
+            // build a mapping of the opponent's choices to their values
+
+            if(opponentChoiceValues.has(childNode.oppChoice) && opponentChoiceValues.get(childNode.oppChoice) < childNode.oppTotalValue){
+                opponentChoiceValues.delete(childNode.oppChoice)
+            }
+            if(!opponentChoiceValues.has(childNode.oppChoice)){
+                opponentChoiceValues.set(childNode.oppChoice, childNode.oppTotalValue)
+            }
+            
         }
 
         let chosenMove = chosenNode.state.baseMove;
+
+        this.oppLastChoiceValues = opponentChoiceValues;
+
+        console.log("the final choice values", util.inspect(this.oppLastChoiceValues));
+
         return chosenMove;
     }
 
@@ -151,12 +179,14 @@ class ProjectMCTS2 {
 
 // cs310 referenced
 class MCTSNode {
-    constructor(state, parent, children, totalValue, numberOfVisits){
-        this.state = state
-        this.parent = parent
-        this.children = children
-        this.totalValue = totalValue
-        this.numberOfVisits = numberOfVisits
+    constructor(state, oppChoice, parent, children, totalValue, oppTotalValue, numberOfVisits){
+        this.state = state;
+        this.oppChoice = oppChoice;
+        this.parent = parent;
+        this.children = children;
+        this.totalValue = totalValue;
+        this.oppTotalValue = oppTotalValue;
+        this.numberOfVisits = numberOfVisits;
     }
 
     calculateUCB() {
@@ -201,8 +231,6 @@ class MCTSNode {
             player = parseInt(player.substring(1)) - 1;
         }
 
-        console.log("request data", util.inspect(state.sides[player].getRequestData()));
-
         return Tools.parseRequestData(state.sides[player].getRequestData());
     }
 
@@ -210,9 +238,10 @@ class MCTSNode {
         var myp = state.sides[state.me].active[0].hp / state.sides[state.me].active[0].maxhp;
         var thp = state.sides[1 - state.me].active[0].hp / state.sides[1 - state.me].active[0].maxhp;
 
-        console.log(myp - 3 * thp - 0.3 * state.turn);
-
-        return myp - 3 * thp - 0.3 * state.turn;
+        let agentEval = myp - 3 * thp - 0.3 * state.turn;
+        let playerEval = thp - 3 * myp - 0.3 * state.turn;
+        return [agentEval, playerEval];
+        
     }
 
     // --- code from minimax agent end --- //
@@ -221,8 +250,7 @@ class MCTSNode {
         let nstate = state.copy();
         let player = nstate.me;
         let states = [];
-
-        console.log("player options", options);
+        let oppChoicesMap = new Map();
 
         if(nstate.sides[player].currentRequest === "switch"){
             for(let switchChoice in options){
@@ -246,14 +274,15 @@ class MCTSNode {
 
                 if(cstate){
                     states.push(cstate);
+
+                    let stateIndex = states.indexOf(cstate);
+                    oppChoicesMap.set(stateIndex, switchChoice);
                 }
             }
         }
         else{
             for (let choice in options){
                 let oppChoices = this.getOptions(nstate, 1 - player);
-    
-                console.log("opp choices", oppChoices);
     
                 for (let oppChoice in oppChoices){
                     let cstate = nstate.copy();
@@ -263,23 +292,31 @@ class MCTSNode {
     
                     if(cstate){
                         states.push(cstate);
+
+                        let stateIndex = states.indexOf(cstate);
+                        oppChoicesMap.set(stateIndex, oppChoice);
                     }
                 }
             }
         }
-
-        return states;
+        return [states, oppChoicesMap];
     }
 
     expansion(options) {
         let nodeList = [];
-        let successors = this.nextstates(this.state, options);
+        let nextstatesreturn = this.nextstates(this.state, options);
+        let successors = nextstatesreturn[0];
+        let oppChoicesMap = nextstatesreturn[1];
         
+        let stateIndex = 0;
         for (let successorState of successors){
-            let nextNode = new MCTSNode(successorState, this, [], 0, 0);
+            let oppChoice = oppChoicesMap.get(stateIndex);
+
+            let nextNode = new MCTSNode(successorState, oppChoice, this, [], 0, 0, 0);
             nodeList.push(nextNode);
 
             this.children.push(nextNode);
+            stateIndex++;
         }
         return nodeList
     
@@ -295,7 +332,8 @@ class MCTSNode {
             if(currentState.isTerminal || currentState.badTerminal || currentState.hasOwnProperty("winner")){ break; }
 
             currentOptions = this.getOptions(currentState, sideID);
-            let successors = this.nextstates(currentState, currentOptions);
+            let nextstatesreturn = this.nextstates(currentState, currentOptions);
+            let successors = nextstatesreturn[0];
             let choiceIndex = Math.floor(Math.random() * successors.length);
 
             currentState = successors[choiceIndex];
@@ -304,10 +342,11 @@ class MCTSNode {
         return this.evaluateState(currentState);
     }
 
-    backpropogate(rolloutValue){
+    backpropogate(rolloutValue, oppRolloutValue){
         let currentNode = this;
         while (true){
             currentNode.totalValue += rolloutValue
+            currentNode.oppTotalValue += oppRolloutValue
             currentNode.numberOfVisits += 1
             if (currentNode.parent === null) { break }
             else { currentNode = currentNode.parent }
