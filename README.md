@@ -1,5 +1,9 @@
 The original GitHub repo that this project built from is not my own work and can be found at https://github.com/scotchkorean27/showdownaiclient. The client, developed by Scott Lee for a joint paper with Julian Togelius, provides the basis for communicating with the Showdown server.
 
+This program requires Node.js to run.  Please install the latest version before attempting to run this program. The code can be executing from command line by entering 'node app.js'
+
+After running the program, the agent will log in and become available for games. Simply challenge the agent on the Pokémon Showdown website to get started. The agent is intended to work with the “[Gen 4] Random Battles” format.
+
 -------------------------------------------------------------
 Initial README below:
 
