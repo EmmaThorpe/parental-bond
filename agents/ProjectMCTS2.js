@@ -22,8 +22,9 @@ const fs = require('fs');
 // All agents should also come with an assumptions object, which will guide how the InterfaceLayer deals with various aspects of hidden information.
 
 class ProjectMCTS2 {
-    constructor() { 
+    constructor(mode) { 
         this.name = 'ProjectMCTS2';
+        this.mode = mode; // expects a boolean - true = adaptive is turned on
         this.oppLastChoiceValues = null;
      }
 
@@ -37,8 +38,16 @@ class ProjectMCTS2 {
         return keys[Math.floor(Math.random() * keys.length)];
     }
 
-    decide(gameState, options, mySide, oppLastChoice) {
-        console.log("the next set of choice values in:", util.inspect(this.oppLastChoiceValues));
+    decide(gameState, options, mySide, oppLastChoice, activeMaybeTrapped) {
+        // a hacky way of checking if we can switch because callback no longer exists
+        // ideally i'd be modifying the pokemon themselves but that would require a lot of unpicking
+        if(activeMaybeTrapped == true){
+            for(let opt in options){
+                if(opt.startsWith("switch")){
+                    delete options[opt];
+                }
+            }
+        }
 
         var d = new Date();
         var n = d.getTime(); // time when decision starts
@@ -69,7 +78,7 @@ class ProjectMCTS2 {
         nodesInTree.push(startNode);
 
         // mcts process
-        while((new Date()).getTime() - n <= 100000) {
+        while((new Date()).getTime() - n <= 25000) {
             currentNode = startNode;
 
             // selection stage
@@ -79,7 +88,7 @@ class ProjectMCTS2 {
 
             // expansion stage
             if((currentNode.numberOfVisits !== 0 || !currentNode.parent) && !currentNode.state.isTerminal){
-                let expandedNodes = currentNode.expansion(options);
+                let expandedNodes = currentNode.expansion(options, activeMaybeTrapped);
 
                 for(let nextExpandedNode of expandedNodes){ nodesInTree.push(nextExpandedNode); }
                 
@@ -89,7 +98,7 @@ class ProjectMCTS2 {
             }
 
             // play-out stage
-            let rolloutreturn = currentNode.rollout(options, mySide.id);
+            let rolloutreturn = currentNode.rollout(options, mySide.id, activeMaybeTrapped);
             let rolloutValue = rolloutreturn[0];
             let oppRolloutValue = rolloutreturn[1];
 
@@ -98,36 +107,69 @@ class ProjectMCTS2 {
         }
         
         let bestChoiceValue = Infinity;
+        let smallestDifference = Infinity;
         let chosenNode = currentNode;
         let opponentChoiceValues = new Map();
+        let oppLastChoiceVal = null;
 
-        if(this.oppLastChoiceValues !== null && oppLastChoice !== null){
-            console.log(oppLastChoice, "\n", util.inspect(this.oppLastChoiceValues));
+        // what to do if we have opponent data
+        if(this.mode === true && this.oppLastChoiceValues !== null && this.oppLastChoiceValues.size !== 0 && oppLastChoice !== null ){
+            oppLastChoiceVal = this.oppLastChoiceValues.get(oppLastChoice);
+
+            if(oppLastChoiceVal !== undefined){
+                for(let childNode of startNode.children){
+                    let difference = Math.abs(childNode.totalValue - oppLastChoiceVal)
+
+                    // pick the move
+                    // always take a winning state even with adaptive difficulty on
+                    if(childNode.hasOwnProperty("winner") && childNode.winner === "ParentalBondBot"){
+                        chosenNode = childNode;
+                        break;
+                    }
+
+                    // checks for the node with the smallest difference in value to the opponent's last choice
+                    if(difference < smallestDifference){
+                        smallestDifference = difference;
+                        chosenNode = childNode;
+                    }
+
+                    // build a mapping of the opponent's choices to their values
+                    if(opponentChoiceValues.has(childNode.oppChoice) && opponentChoiceValues.get(childNode.oppChoice) < childNode.oppTotalValue){
+                        opponentChoiceValues.delete(childNode.oppChoice)
+                    }
+                    if(!opponentChoiceValues.has(childNode.oppChoice)){
+                        opponentChoiceValues.set(childNode.oppChoice, childNode.oppTotalValue)
+                    }
+                    
+                }
+            }
         }
-
-        for(let childNode of startNode.children){
-            // pick the move using node values
-            if(childNode.totalValue < bestChoiceValue){
-                bestChoiceValue = childNode.totalValue;
-                chosenNode = childNode;
+        // what to do if we don't have opponent data or if we aren't adapting
+        if(this.mode === false || this.oppLastChoiceValues === null || oppLastChoice === null || oppLastChoiceVal === undefined){
+            for(let childNode of startNode.children){
+                // pick the move using node values
+                if(childNode.totalValue < bestChoiceValue){
+                    bestChoiceValue = childNode.totalValue;
+                    chosenNode = childNode;
+                }
+    
+                // build a mapping of the opponent's choices to their values
+                // only do this if adaptivity enabled
+                if(this.mode === true){
+                    if(opponentChoiceValues.has(childNode.oppChoice) && opponentChoiceValues.get(childNode.oppChoice) < childNode.oppTotalValue){
+                        opponentChoiceValues.delete(childNode.oppChoice)
+                    }
+                    if(!opponentChoiceValues.has(childNode.oppChoice)){
+                        opponentChoiceValues.set(childNode.oppChoice, childNode.oppTotalValue)
+                    }
+                }
+                
             }
-
-            // build a mapping of the opponent's choices to their values
-
-            if(opponentChoiceValues.has(childNode.oppChoice) && opponentChoiceValues.get(childNode.oppChoice) < childNode.oppTotalValue){
-                opponentChoiceValues.delete(childNode.oppChoice)
-            }
-            if(!opponentChoiceValues.has(childNode.oppChoice)){
-                opponentChoiceValues.set(childNode.oppChoice, childNode.oppTotalValue)
-            }
-            
         }
 
         let chosenMove = chosenNode.state.baseMove;
 
         this.oppLastChoiceValues = opponentChoiceValues;
-
-        console.log("the final choice values", util.inspect(this.oppLastChoiceValues));
 
         return chosenMove;
     }
@@ -226,33 +268,82 @@ class MCTSNode {
 
     // --- code from minimax agent begin --- //
 
-    getOptions(state, player) {
+    getOptions(state, player, activeMaybeTrapped) {
         if (typeof (player) == 'string' && player.startsWith('p')) {
             player = parseInt(player.substring(1)) - 1;
         }
 
-        return Tools.parseRequestData(state.sides[player].getRequestData());
+        let options = Tools.parseRequestData(state.sides[player].getRequestData());
+        
+        // arena trap / shadow tag / magnet pull don't seem to be handled properly elsewhere anymore
+        // this removes switching as an option if possibly trapped to avoid hanging at error
+        if(activeMaybeTrapped == true){
+            for(let opt in options){
+                if(opt.startsWith("switch")){
+                    delete options[opt];
+                }
+            }
+        }
+
+        return options;
     }
 
     evaluateState(state) {
+        // agent's total hp of the team in the back
+        let mytotalcurrenthp = 0;
+        let mytotalmaxhp = 0;
+        for(let pokemon of state.sides[state.me].pokemon){
+            if(pokemon.species !== state.sides[state.me].active[0].species){
+                mytotalcurrenthp += pokemon.hp;
+                mytotalmaxhp += pokemon.maxhp
+            }
+        }
+
+        let mytotalhp = mytotalcurrenthp / mytotalmaxhp
+
+        let theirtotalcurrenthp = 0;
+        let theirtotalmaxhp = 0;
+        for(let pokemon of state.sides[1 - state.me].pokemon){
+            if(pokemon.species !== state.sides[1 - state.me].active[0].species){
+                theirtotalcurrenthp += pokemon.hp;
+                theirtotalmaxhp += pokemon.maxhp
+            }
+        }
+
+        // if we don't know about a mon yet, it must be at full hp. approximated as 100/100
+        let knownPokemon = state.sides[1 - state.me].pokemon.length;
+        if(knownPokemon < 6){
+            theirtotalcurrenthp += 100
+            theirtotalmaxhp += 100
+            knownPokemon++
+        }
+        
+        let theirtotalhp = theirtotalcurrenthp / theirtotalmaxhp
+
         var myp = state.sides[state.me].active[0].hp / state.sides[state.me].active[0].maxhp;
         var thp = state.sides[1 - state.me].active[0].hp / state.sides[1 - state.me].active[0].maxhp;
 
-        let agentEval = myp - 3 * thp - 0.3 * state.turn;
-        let playerEval = thp - 3 * myp - 0.3 * state.turn;
+        let agentEval = (myp + (0.7 * mytotalhp)) - (3 * (thp + 0.7 * theirtotalhp)) - (0.3 * state.turn);
+        let playerEval = (thp + (0.7 * theirtotalhp)) - (3 * (myp + 0.7 * mytotalhp)) - (0.3 * state.turn);
+
+        // console.log(state.turn);
+        // console.log(agentEval, playerEval);
+
+        // console.log("agent hp:", myp, "player hp:", thp, "agent eval:", agentEval, "player eval:", playerEval)
+
         return [agentEval, playerEval];
         
     }
 
     // --- code from minimax agent end --- //
 
-    nextstates(state, options){
+    nextstates(state, options, activeMaybeTrapped){
         let nstate = state.copy();
         let player = nstate.me;
         let states = [];
         let oppChoicesMap = new Map();
 
-        if(nstate.sides[player].currentRequest === "switch"){
+        if(nstate.sides[player].currentRequest === "switch" && nstate.sides[1 - player].currentRequest !== "switch"){
             for(let switchChoice in options){
                 let cstate = nstate.copy();
 
@@ -264,8 +355,8 @@ class MCTSNode {
                 }
             }
         }
-        else if(nstate.sides[1 - player].currentRequest === "switch"){
-            let switchChoices = this.getOptions(nstate, 1 - player);
+        else if(nstate.sides[1 - player].currentRequest === "switch" && nstate.sides[player].currentRequest !== "switch"){
+            let switchChoices = this.getOptions(nstate, 1 - player, activeMaybeTrapped);
             for(let switchChoice in switchChoices){
                 let cstate = nstate.copy();
 
@@ -282,7 +373,7 @@ class MCTSNode {
         }
         else{
             for (let choice in options){
-                let oppChoices = this.getOptions(nstate, 1 - player);
+                let oppChoices = this.getOptions(nstate, 1 - player, activeMaybeTrapped);
     
                 for (let oppChoice in oppChoices){
                     let cstate = nstate.copy();
@@ -302,9 +393,9 @@ class MCTSNode {
         return [states, oppChoicesMap];
     }
 
-    expansion(options) {
+    expansion(options, activeMaybeTrapped) {
         let nodeList = [];
-        let nextstatesreturn = this.nextstates(this.state, options);
+        let nextstatesreturn = this.nextstates(this.state, options, activeMaybeTrapped);
         let successors = nextstatesreturn[0];
         let oppChoicesMap = nextstatesreturn[1];
         
@@ -322,17 +413,17 @@ class MCTSNode {
     
     }
 
-    rollout(options, sideID){
+    rollout(options, sideID, activeMaybeTrapped){
         let initialState = this.state;
         let currentState = this.state;
         let currentOptions = options;
-        let rolloutDepth = 3;
+        let rolloutDepth = 2;
 
         for (let i = 0; i < rolloutDepth; i++){
             if(currentState.isTerminal || currentState.badTerminal || currentState.hasOwnProperty("winner")){ break; }
 
-            currentOptions = this.getOptions(currentState, sideID);
-            let nextstatesreturn = this.nextstates(currentState, currentOptions);
+            currentOptions = this.getOptions(currentState, sideID, activeMaybeTrapped);
+            let nextstatesreturn = this.nextstates(currentState, currentOptions, activeMaybeTrapped);
             let successors = nextstatesreturn[0];
             let choiceIndex = Math.floor(Math.random() * successors.length);
 

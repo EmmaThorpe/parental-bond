@@ -2,6 +2,7 @@
 
 var simulator = require('./zarel/battle-engine').Battle;
 var fs = require('fs');
+var util = require('util');
 
 class InterfaceLayer {
     constructor(id, username, cLayer, agent) {
@@ -18,6 +19,7 @@ class InterfaceLayer {
         // Because apparently, when zoroark is active, the server lies to everyone
         this.zoroarkActive = false;
         this.oppLastChoice = ''
+        this.activeMaybeTrapped = false;
     }
 
     fetch_random_key(obj) {
@@ -302,11 +304,9 @@ class InterfaceLayer {
 
             if (this.mySide == player) { this.battle.sides[this.mySID].pokemonLeft = parseInt(arr[3]); }
             else { this.battle.sides[1 - this.mySID].pokemonLeft = parseInt(arr[3]); }
-
-            console.log("teamsize checker", arr[2], arr[3], this.battle.sides[this.mySID].pokemonLeft)
         }
         else if (tag == "request") {
-            // for whatever reason they now send an empty request upon acceptinga challenge and you have to parse out the rest of the stuff in various other tags, so anything involving the first turn here is no longer relevant anyways
+            // for whatever reason they now send an empty request upon accepting a challenge and you have to parse out the rest of the stuff in various other tags, so anything involving the first turn here is no longer relevant anyways
             if(arr[2]){
                 var requestData = JSON.parse(arr[2]);
                 
@@ -338,6 +338,12 @@ class InterfaceLayer {
                             }
                         }
                     }
+                    if(requestData['active'][0]['maybeTrapped'] == true || requestData['active'][0]['trapped']){
+                        this.activeMaybeTrapped = true;
+                    }
+                    else{
+                        this.activeMaybeTrapped = false;
+                    }
                 }
                 if (requestData['side'] && !(requestData['active'] && requestData['active'][0]['trapped'])) {
                     // Basically, if we switch to zoroark, the request data will reflect it, but the switch event data will not.
@@ -358,7 +364,7 @@ class InterfaceLayer {
                 }
                 if (requestData['forceSwitch'] && requestData['forceSwitch'][0]) {
                     var choice = '';
-                    choice = this.agent.decide(this.battle, this.cTurnOptions, this.battle.sides[this.mySID], this.oppLastChoice, true);
+                    choice = this.agent.decide(this.battle, this.cTurnOptions, this.battle.sides[this.mySID], this.oppLastChoice, this.activeMaybeTrapped);
                     if (!choice || !this.cTurnOptions[choice]) {
                         choice = this.fetch_random_key(this.cTurnOptions);
                     }
@@ -392,9 +398,12 @@ class InterfaceLayer {
                 var pName = pInfo[0];
                 for (var i = 0; i < this.battle.sides[1 - this.mySID].pokemon.length; i++) {
                     if (pName == this.battle.sides[1 - this.mySID].pokemon[i].species) {
+                        let switchNum = i + 1;
+                        this.oppLastChoice = "switch " + switchNum;
+                        console.log("set the last choice to", this.oppLastChoice, "from existing list");
+
                         this.runExternalSwitch(this.battle.sides[1 - this.mySID].pokemon[i], 0);
                         found = true;
-                        this.oppLastChoice = "switch " + i;
                         break;
                     }
                 }
@@ -414,10 +423,13 @@ class InterfaceLayer {
                     }
                     var npoke = this.agent.assumePokemon(pName, pLev, pGen, this.battle.sides[1 - this.mySID]);
                     npoke.position = this.battle.sides[1 - this.mySID].pokemon.length;
+
+                    let switchNum = parseInt(this.battle.sides[1 - this.mySID].pokemon.length) + 1;
+                    this.oppLastChoice = "switch " + switchNum;
+                    console.log("set the last choice to", this.oppLastChoice, "from !found");
+
                     this.battle.sides[1 - this.mySID].pokemon.push(npoke);
                     this.runExternalSwitch(npoke, 0);
-
-                    this.oppLastChoice = "switch " + npoke.position;
                 }
             }
         }
@@ -487,7 +499,7 @@ class InterfaceLayer {
                 choice = 'move 1';
             }
             else {
-                choice = this.agent.decide(this.battle, this.cTurnOptions, this.battle.sides[this.mySID],  this.oppLastChoice,);
+                choice = this.agent.decide(this.battle, this.cTurnOptions, this.battle.sides[this.mySID],  this.oppLastChoice, this.activeMaybeTrapped);
                 if (!choice || !this.cTurnOptions[choice]) {
                     choice = this.fetch_random_key(this.cTurnOptions);
                 }
@@ -495,14 +507,17 @@ class InterfaceLayer {
             this.cLayer.send(this.id + '|/choose ' + choice, this.mySide);
                 // Add code that processes the end of a turn
         }
-        else if (tag == 'callback') {
+        /*else if (tag == 'callback') {
             if (arr[2] == 'trapped') {
+                // ignore all the below notes because i don't think callback exists in the current day.
+                // being trapped is really annoying now in that i don't see any information passed in about it
+
                 // So this is where things get complicated.  maybetrapped means that something caused the opponent to be trapped
                 // callback can confirm that they are trapped, but this doesnt tell us anything conclusive.
                 // There's a specific confluence of events wherein a trapped callback reveals the ability of the opponent.
                 this.cLayer.send(this.id + '|/choose ' + this.agent.decide(this.battle, this.cTurnMoves, this.battle.sides[this.mySID]), this.mySide,  this.oppLastChoice);
             }
-        }
+        }*/
         else if (tag == 'move') {
             // Should also update lastmoveused
             // if arr[4] has [from] lockedmove and the user has the volatile twoturnmove, then we have to remove the volatile

@@ -983,6 +983,12 @@ exports.Formats = [
 		ruleset: ['Cancel Mod'],
 	},
 
+	{
+		name: "[Gen 4] Random Battle",
+		mod: 'gen4',
+		ruleset: ['Obtainable', 'Sleep Clause Mod', 'HP Percentage Mod', 'Cancel Mod'],
+	},
+
 	// DPP Doubles
 	///////////////////////////////////////////////////////////////////
 
