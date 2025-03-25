@@ -78,7 +78,7 @@ class ProjectMCTS2 {
         nodesInTree.push(startNode);
 
         // mcts process
-        while((new Date()).getTime() - n <= 25000) {
+        while((new Date()).getTime() - n <= 45000) {
             currentNode = startNode;
 
             // selection stage
@@ -98,7 +98,7 @@ class ProjectMCTS2 {
             }
 
             // play-out stage
-            let rolloutreturn = currentNode.rollout(options, mySide.id, activeMaybeTrapped);
+            let rolloutreturn = currentNode.rollout(options, mySide.id, activeMaybeTrapped, oppLastChoice);
             let rolloutValue = rolloutreturn[0];
             let oppRolloutValue = rolloutreturn[1];
 
@@ -106,7 +106,7 @@ class ProjectMCTS2 {
             currentNode.backpropogate(rolloutValue, oppRolloutValue);
         }
         
-        let bestChoiceValue = Infinity;
+        let bestChoiceValue = -Infinity;
         let smallestDifference = Infinity;
         let chosenNode = currentNode;
         let opponentChoiceValues = new Map();
@@ -148,7 +148,7 @@ class ProjectMCTS2 {
         if(this.mode === false || this.oppLastChoiceValues === null || oppLastChoice === null || oppLastChoiceVal === undefined){
             for(let childNode of startNode.children){
                 // pick the move using node values
-                if(childNode.totalValue < bestChoiceValue){
+                if(childNode.totalValue > bestChoiceValue){
                     bestChoiceValue = childNode.totalValue;
                     chosenNode = childNode;
                 }
@@ -163,7 +163,6 @@ class ProjectMCTS2 {
                         opponentChoiceValues.set(childNode.oppChoice, childNode.oppTotalValue)
                     }
                 }
-                
             }
         }
 
@@ -288,43 +287,34 @@ class MCTSNode {
         return options;
     }
 
-    evaluateState(state) {
+    evaluateState(state, oppLastChoice) {
         // agent's total hp of the team in the back
-        let mytotalcurrenthp = 0;
-        let mytotalmaxhp = 0;
+        let mytotalhp = 0;
         for(let pokemon of state.sides[state.me].pokemon){
             if(pokemon.species !== state.sides[state.me].active[0].species){
-                mytotalcurrenthp += pokemon.hp;
-                mytotalmaxhp += pokemon.maxhp
+                mytotalhp += pokemon.hp / pokemon.maxhp;
             }
         }
 
-        let mytotalhp = mytotalcurrenthp / mytotalmaxhp
-
-        let theirtotalcurrenthp = 0;
-        let theirtotalmaxhp = 0;
+        let theirtotalhp = 0;
         for(let pokemon of state.sides[1 - state.me].pokemon){
             if(pokemon.species !== state.sides[1 - state.me].active[0].species){
-                theirtotalcurrenthp += pokemon.hp;
-                theirtotalmaxhp += pokemon.maxhp
+                theirtotalhp += pokemon.hp / pokemon.maxhp;
             }
         }
 
-        // if we don't know about a mon yet, it must be at full hp. approximated as 100/100
+        // if we don't know about a mon yet, it must be at full hp (1)
         let knownPokemon = state.sides[1 - state.me].pokemon.length;
-        if(knownPokemon < 6){
-            theirtotalcurrenthp += 100
-            theirtotalmaxhp += 100
+        while(knownPokemon < 6){
+            theirtotalhp += 1
             knownPokemon++
         }
-        
-        let theirtotalhp = theirtotalcurrenthp / theirtotalmaxhp
 
         var myp = state.sides[state.me].active[0].hp / state.sides[state.me].active[0].maxhp;
         var thp = state.sides[1 - state.me].active[0].hp / state.sides[1 - state.me].active[0].maxhp;
 
-        let agentEval = (myp + (0.7 * mytotalhp)) - (3 * (thp + 0.7 * theirtotalhp)) - (0.3 * state.turn);
-        let playerEval = (thp + (0.7 * theirtotalhp)) - (3 * (myp + 0.7 * mytotalhp)) - (0.3 * state.turn);
+        let agentEval = (myp + mytotalhp) - (3 * (thp + theirtotalhp)) - (0.3 * state.turn);
+        let playerEval = (thp + theirtotalhp) - (3 * (myp + mytotalhp)) - (0.3 * state.turn);
 
         // console.log(state.turn);
         // console.log(agentEval, playerEval);
@@ -346,6 +336,8 @@ class MCTSNode {
         if(nstate.sides[player].currentRequest === "switch" && nstate.sides[1 - player].currentRequest !== "switch"){
             for(let switchChoice in options){
                 let cstate = nstate.copy();
+
+                cstate.baseMove = switchChoice;
 
                 cstate.choose('p' + (player + 1), switchChoice);
                 cstate.choose('p' + (1 - player + 1), 'forceskip');
@@ -377,10 +369,11 @@ class MCTSNode {
     
                 for (let oppChoice in oppChoices){
                     let cstate = nstate.copy();
-                    
-                    cstate.choose('p' + (1 - player + 1), oppChoice);
+                    cstate.baseMove = choice;
+
                     cstate.choose('p' + (player + 1), choice);
-    
+                    cstate.choose('p' + (1 - player + 1), oppChoice);
+                    
                     if(cstate){
                         states.push(cstate);
 
@@ -413,7 +406,7 @@ class MCTSNode {
     
     }
 
-    rollout(options, sideID, activeMaybeTrapped){
+    rollout(options, sideID, activeMaybeTrapped, oppLastChoice){
         let initialState = this.state;
         let currentState = this.state;
         let currentOptions = options;
@@ -430,7 +423,7 @@ class MCTSNode {
             currentState = successors[choiceIndex];
         }
 
-        return this.evaluateState(currentState);
+        return this.evaluateState(currentState, oppLastChoice);
     }
 
     backpropogate(rolloutValue, oppRolloutValue){

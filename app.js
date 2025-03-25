@@ -12,7 +12,6 @@ var BFSAgent = require('./agents/BFSAgent').Agent;
 var MinimaxAgent = require('./agents/MinimaxAgent').Agent;
 var SPAgent = require('./agents/TypeSelector').Agent;
 var ProjectSampleRandom = require('./agents/ProjectSampleRandom').Agent;
-var ProjectMCTS = require('./agents/ProjectMCTS').Agent;
 var ProjectMCTS2 = require('./agents/ProjectMCTS2').Agent;
 var PMMAgent = require('./agents/PBFS').Agent;
 
@@ -99,7 +98,7 @@ if (online) {
             console.log(data);
             var roomid = data.split("\n")[0].substring(1);
             if (battles.has(roomid) == false) {
-                battles.set(roomid, new InterfaceLayer(roomid, cuser, new WSLayer(this), new ProjectMCTS2(true)));
+                battles.set(roomid, new InterfaceLayer(roomid, cuser, new WSLayer(this), new ProjectMCTS2(false)));
                 battleCount--;
                 if (battleCount > 0) {
                     for (var format of formats) {
