@@ -365,7 +365,7 @@ class InterfaceLayer {
                 if (requestData['forceSwitch'] && requestData['forceSwitch'][0]) {
                     var choice = '';
                     choice = this.agent.decide(this.battle, this.cTurnOptions, this.battle.sides[this.mySID], this.oppLastChoice, this.activeMaybeTrapped);
-                    if (!choice || !this.cTurnOptions[choice]) {
+                    if (!choice || typeof choice == undefined || choice == "undefined" || !this.cTurnOptions[choice]) {
                         choice = this.fetch_random_key(this.cTurnOptions);
                     }
                     this.cLayer.send(this.id + '|/choose ' + choice, this.mySide);
@@ -500,7 +500,7 @@ class InterfaceLayer {
             }
             else {
                 choice = this.agent.decide(this.battle, this.cTurnOptions, this.battle.sides[this.mySID],  this.oppLastChoice, this.activeMaybeTrapped);
-                if (!choice || !this.cTurnOptions[choice]) {
+                if (!choice || typeof choice == undefined || choice == "undefined" || !this.cTurnOptions[choice]) {
                     choice = this.fetch_random_key(this.cTurnOptions);
                 }
             }
