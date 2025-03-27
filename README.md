@@ -4,6 +4,8 @@ This program requires Node.js to run.  Please install the latest version before 
 
 After running the program, the agent will log in and become available for games. Simply challenge the agent on the Pokémon Showdown website to get started. The agent is intended to work with the “[Gen 4] Random Battles” format.
 
+If you would like to swap to a different agent, modify the "agentChoice" variable at the top of the app.js file. Choices applicable to the project's use cases are listed in a comment above for your convenience.
+
 -------------------------------------------------------------
 Initial README below:
 

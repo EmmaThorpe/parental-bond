@@ -53,8 +53,12 @@ if (online) {
     // This is where you would put the formats that you are interested in having your AI participate in.
     var formats = ['gen4random'];
     //var team = "Articuno||leftovers|pressure|icebeam,hurricane,substitute,roost|Modest|252,,,252,4,||,,,30,30,|||]Ludicolo||lifeorb|swiftswim|surf,gigadrain,icebeam,raindance|Modest|4,,,252,,252|||||]Volbeat||damprock|prankster|tailglow,tackle,encore,raindance|Bold|248,,252,,8,|M||||]Seismitoad||lifeorb|swiftswim|hydropump,earthpower,stealthrock,raindance|Modest|,,,252,4,252|||||]Alomomola||damprock|regenerator|wish,protect,toxic,raindance|Bold|252,,252,,4,|||||]Armaldo||leftovers|swiftswim|xscissor,stoneedge,aquatail,rapidspin|Adamant|128,252,4,,,124|||||"
-    var team = "Hitmonlee||leftovers|reckless|megakick|Modest|252,,,252,4,||,,,30,30,|||]Clefairy||leftovers|cutecharm|metronome|Impish|252,4,252,,,|||||]Shaymin||leftovers|naturalcure|psychic|Modest|4,,,252,,252|||||"
+    var team = "Jumpluff||leftovers|leafguard|rest,sleeptalk,uturn,frustration|Modest|252,,,252,4,||,,,30,30,|||]Cherrim||leftovers|flowergift|synthesis,energyball,toxic,seedbomb|Modest|252,,,252,4,||,,,30,30,|||]Hitmonlee||leftovers|reckless|megakick|Modest|252,,,252,4,||,,,30,30,|||]Clefairy||leftovers|cutecharm|metronome|Impish|252,4,252,,,|||||]Shaymin||leftovers|naturalcure|psychic|Modest|4,,,252,,252|||||"
     
+    // options: ProjectMCTS2(true) ; ProjectMCTS2(false) ; RandomAgent
+    let agentChoice = new ProjectMCTS2(true);
+
+
     // This is pretty much all netcode.  Not a ton to worry about here.
     var battles = new hashmap.HashMap();
     var challstr = '';
@@ -98,7 +102,7 @@ if (online) {
             console.log(data);
             var roomid = data.split("\n")[0].substring(1);
             if (battles.has(roomid) == false) {
-                battles.set(roomid, new InterfaceLayer(roomid, cuser, new WSLayer(this), new ProjectMCTS2(false)));
+                battles.set(roomid, new InterfaceLayer(roomid, cuser, new WSLayer(this), agentChoice));
                 battleCount--;
                 if (battleCount > 0) {
                     for (var format of formats) {
