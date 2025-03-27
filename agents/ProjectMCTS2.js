@@ -39,16 +39,6 @@ class ProjectMCTS2 {
     }
 
     decide(gameState, options, mySide, oppLastChoice, activeMaybeTrapped) {
-        // a hacky way of checking if we can switch because callback no longer exists
-        // ideally i'd be modifying the pokemon themselves but that would require a lot of unpicking
-        if(activeMaybeTrapped == true){
-            for(let opt in options){
-                if(opt.startsWith("switch")){
-                    delete options[opt];
-                }
-            }
-        }
-
         var d = new Date();
         var n = d.getTime(); // time when decision starts
 
@@ -76,6 +66,17 @@ class ProjectMCTS2 {
         let currentNode = startNode;
         let nodesInTree = [];
         nodesInTree.push(startNode);
+
+        // a hacky way of checking if we can switch because callback no longer exists
+        // ideally i'd be modifying the pokemon themselves but that would require a lot of unpicking
+        let hasMove = Object.keys(options).some(function(k){return k.startsWith("move")}); // check if there are any moves in the object
+        if(activeMaybeTrapped == true || hasMove){
+            for(let opt in options){
+                if(opt.startsWith("switch")){
+                    delete options[opt];
+                }
+            }
+        }
 
         // mcts process
         while((new Date()).getTime() - n <= 45000) {
@@ -108,8 +109,10 @@ class ProjectMCTS2 {
         
         let bestChoiceValue = -Infinity;
         let smallestDifference = Infinity;
-        let chosenNode = currentNode;
-        let opponentChoiceValues = new Map();
+        let chosenMove = currentNode.state.baseMove;
+        let agentChoiceValues = [];
+        let opponentChoiceValues = [];
+        let opponentChoiceValuesMap = new Map();
         let oppLastChoiceVal = null;
 
         // what to do if we have opponent data
@@ -118,57 +121,107 @@ class ProjectMCTS2 {
 
             if(oppLastChoiceVal !== undefined){
                 for(let childNode of startNode.children){
-                    let difference = Math.abs(childNode.totalValue - oppLastChoiceVal)
+                    // add agent moves to an object to make an average later
+                    let agentfound = agentChoiceValues.find(el => el.move === childNode.state.baseMove);
+                    if(agentfound){
+                        agentfound.allNodeValues += childNode.totalValue;
+                        agentfound.numberOfNodes += 1;
+                        if(childNode.hasOwnProperty("winner") && childNode.winner === "ParentalBondBot"){
+                            agentfound.possiblewin = true;
+                        }
+                    }
+                    else{
+                        let possiblewin = childNode.hasOwnProperty("winner") && childNode.winner === "ParentalBondBot";
+                        let newAgentChoice = {"move":childNode.state.baseMove,"allNodeValues":childNode.totalValue,"numberOfNodes":1,"possiblewin":possiblewin}
+                        agentChoiceValues.push(newAgentChoice);
+                    }
 
-                    // pick the move
-                    // always take a winning state even with adaptive difficulty on
-                    if(childNode.hasOwnProperty("winner") && childNode.winner === "ParentalBondBot"){
-                        chosenNode = childNode;
+                    // add opponent moves to an object to make an average later
+                    let oppfound = opponentChoiceValues.find(el => el.move === childNode.state.baseMove);
+                    if(oppfound){
+                        oppfound.allNodeValues += childNode.totalValue;
+                        oppfound.numberOfNodes += 1;
+                    }
+                    else{
+                        let newOppChoice = {"move":childNode.state.baseMove,"allNodeValues":childNode.totalValue,"numberOfNodes":1}
+                        opponentChoiceValues.push(newOppChoice);
+                    }
+                }
+
+                // go through the choices and look for the smallest average difference in value
+                for(let choice of agentChoiceValues){
+                    let average = choice.allNodeValues / choice.numberOfNodes;
+                    let difference = Math.abs(average - oppLastChoiceVal)
+                    // exception if we might win
+                    if(choice.hasOwnProperty("possiblewin") && choice.possiblewin === true){
+                        chosenMove = choice.move;
                         break;
                     }
-
-                    // checks for the node with the smallest difference in value to the opponent's last choice
                     if(difference < smallestDifference){
                         smallestDifference = difference;
-                        chosenNode = childNode;
+                        chosenMove = choice.move;
                     }
+                }
 
-                    // build a mapping of the opponent's choices to their values
-                    if(opponentChoiceValues.has(childNode.oppChoice) && opponentChoiceValues.get(childNode.oppChoice) < childNode.oppTotalValue){
-                        opponentChoiceValues.delete(childNode.oppChoice)
-                    }
-                    if(!opponentChoiceValues.has(childNode.oppChoice)){
-                        opponentChoiceValues.set(childNode.oppChoice, childNode.oppTotalValue)
-                    }
-                    
+                // add mapping for next turn
+                for(let choice of opponentChoiceValues){
+                    let average = choice.allNodeValues / choice.numberOfNodes;
+                    opponentChoiceValuesMap.set(choice.move, average);
                 }
             }
         }
         // what to do if we don't have opponent data or if we aren't adapting
         if(this.mode === false || this.oppLastChoiceValues === null || oppLastChoice === null || oppLastChoiceVal === undefined){
             for(let childNode of startNode.children){
-                // pick the move using node values
-                if(childNode.totalValue > bestChoiceValue){
-                    bestChoiceValue = childNode.totalValue;
-                    chosenNode = childNode;
+                //console.log("child node for", childNode.baseMove, "-", childNode.totalValue);
+                // add agent moves to an object to make an average later
+                let agentfound = agentChoiceValues.find(el => el.move === childNode.state.baseMove);
+                if(agentfound){
+                    agentfound.allNodeValues += childNode.totalValue;
+                    agentfound.numberOfNodes += 1;
+                    //console.log(agentfound.move, "- add", childNode.totalValue, "to get", agentfound.allNodeValues);
+                }
+                else{
+                    let newAgentChoice = {"move":childNode.state.baseMove,"allNodeValues":childNode.totalValue,"numberOfNodes":1}
+                    agentChoiceValues.push(newAgentChoice);
+                    //console.log(newAgentChoice.move, "- add", childNode.totalValue, "to get", newAgentChoice.allNodeValues);
                 }
     
                 // build a mapping of the opponent's choices to their values
                 // only do this if adaptivity enabled
                 if(this.mode === true){
-                    if(opponentChoiceValues.has(childNode.oppChoice) && opponentChoiceValues.get(childNode.oppChoice) < childNode.oppTotalValue){
-                        opponentChoiceValues.delete(childNode.oppChoice)
+                    let oppfound = opponentChoiceValues.find(el => el.move === childNode.state.baseMove);
+                    if(oppfound){
+                        oppfound.allNodeValues += childNode.totalValue;
+                        oppfound.numberOfNodes += 1;
                     }
-                    if(!opponentChoiceValues.has(childNode.oppChoice)){
-                        opponentChoiceValues.set(childNode.oppChoice, childNode.oppTotalValue)
+                    else{
+                        let newOppChoice = {"move":childNode.state.baseMove,"allNodeValues":childNode.totalValue,"numberOfNodes":1}
+                        opponentChoiceValues.push(newOppChoice);
                     }
+                }
+            }
+
+            // get the best move on average
+            for(let choice of agentChoiceValues){
+                let average = choice.allNodeValues / choice.numberOfNodes;
+                //console.log("final choices", choice.move, "-", average);
+                if(average > bestChoiceValue){
+                    bestChoiceValue = average;
+                    chosenMove = choice.move;
+                }
+            }
+
+            // add mapping for next turn if enabled
+            if(this.mode === true){
+                for(let choice of opponentChoiceValues){
+                    let average = choice.allNodeValues / choice.numberOfNodes;
+                    opponentChoiceValuesMap.set(choice.move, average);
                 }
             }
         }
 
-        let chosenMove = chosenNode.state.baseMove;
-
-        this.oppLastChoiceValues = opponentChoiceValues;
+        this.oppLastChoiceValues = opponentChoiceValuesMap;
 
         return chosenMove;
     }
@@ -273,10 +326,10 @@ class MCTSNode {
         }
 
         let options = Tools.parseRequestData(state.sides[player].getRequestData());
-        
         // arena trap / shadow tag / magnet pull don't seem to be handled properly elsewhere anymore
         // this removes switching as an option if possibly trapped to avoid hanging at error
-        if(activeMaybeTrapped == true){
+        let hasMove = Object.keys(options).some(function(k){return k.startsWith("move")});
+        if(activeMaybeTrapped == true || hasMove){
             for(let opt in options){
                 if(opt.startsWith("switch")){
                     delete options[opt];
@@ -288,6 +341,7 @@ class MCTSNode {
     }
 
     evaluateState(state, oppLastChoice) {
+        /*
         // agent's total hp of the team in the back
         let mytotalhp = 0;
         for(let pokemon of state.sides[state.me].pokemon){
@@ -309,17 +363,13 @@ class MCTSNode {
             theirtotalhp += 1
             knownPokemon++
         }
+        */
 
         var myp = state.sides[state.me].active[0].hp / state.sides[state.me].active[0].maxhp;
         var thp = state.sides[1 - state.me].active[0].hp / state.sides[1 - state.me].active[0].maxhp;
 
-        let agentEval = (myp + mytotalhp) - (3 * (thp + theirtotalhp)) - (0.3 * state.turn);
-        let playerEval = (thp + theirtotalhp) - (3 * (myp + mytotalhp)) - (0.3 * state.turn);
-
-        // console.log(state.turn);
-        // console.log(agentEval, playerEval);
-
-        // console.log("agent hp:", myp, "player hp:", thp, "agent eval:", agentEval, "player eval:", playerEval)
+        let agentEval = (myp) - (thp) - (0.3 * state.turn);
+        let playerEval = (thp) - (myp) - (0.3 * state.turn);
 
         return [agentEval, playerEval];
         
@@ -418,7 +468,10 @@ class MCTSNode {
             currentOptions = this.getOptions(currentState, sideID, activeMaybeTrapped);
             let nextstatesreturn = this.nextstates(currentState, currentOptions, activeMaybeTrapped);
             let successors = nextstatesreturn[0];
+            let oppChoicesMap = nextstatesreturn[1];
             let choiceIndex = Math.floor(Math.random() * successors.length);
+
+            oppLastChoice = oppChoicesMap.get(choiceIndex);
 
             currentState = successors[choiceIndex];
         }
