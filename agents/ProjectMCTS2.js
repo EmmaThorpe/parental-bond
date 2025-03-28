@@ -137,13 +137,13 @@ class ProjectMCTS2 {
                     }
 
                     // add opponent moves to an object to make an average later
-                    let oppfound = opponentChoiceValues.find(el => el.move === childNode.state.baseMove);
+                    let oppfound = opponentChoiceValues.find(el => el.move === childNode.oppChoice);
                     if(oppfound){
-                        oppfound.allNodeValues += childNode.totalValue;
+                        oppfound.allNodeValues += childNode.oppTotalValue;
                         oppfound.numberOfNodes += 1;
                     }
                     else{
-                        let newOppChoice = {"move":childNode.state.baseMove,"allNodeValues":childNode.totalValue,"numberOfNodes":1}
+                        let newOppChoice = {"move":childNode.oppChoice,"allNodeValues":childNode.oppTotalValue,"numberOfNodes":1}
                         opponentChoiceValues.push(newOppChoice);
                     }
                 }
@@ -173,30 +173,27 @@ class ProjectMCTS2 {
         // what to do if we don't have opponent data or if we aren't adapting
         if(this.mode === false || this.oppLastChoiceValues === null || oppLastChoice === null || oppLastChoiceVal === undefined){
             for(let childNode of startNode.children){
-                //console.log("child node for", childNode.baseMove, "-", childNode.totalValue);
                 // add agent moves to an object to make an average later
                 let agentfound = agentChoiceValues.find(el => el.move === childNode.state.baseMove);
                 if(agentfound){
                     agentfound.allNodeValues += childNode.totalValue;
                     agentfound.numberOfNodes += 1;
-                    //console.log(agentfound.move, "- add", childNode.totalValue, "to get", agentfound.allNodeValues);
                 }
                 else{
                     let newAgentChoice = {"move":childNode.state.baseMove,"allNodeValues":childNode.totalValue,"numberOfNodes":1}
                     agentChoiceValues.push(newAgentChoice);
-                    //console.log(newAgentChoice.move, "- add", childNode.totalValue, "to get", newAgentChoice.allNodeValues);
                 }
     
                 // build a mapping of the opponent's choices to their values
                 // only do this if adaptivity enabled
                 if(this.mode === true){
-                    let oppfound = opponentChoiceValues.find(el => el.move === childNode.state.baseMove);
+                    let oppfound = opponentChoiceValues.find(el => el.move === childNode.oppChoice);
                     if(oppfound){
-                        oppfound.allNodeValues += childNode.totalValue;
+                        oppfound.allNodeValues += childNode.oppTotalValue;
                         oppfound.numberOfNodes += 1;
                     }
                     else{
-                        let newOppChoice = {"move":childNode.state.baseMove,"allNodeValues":childNode.totalValue,"numberOfNodes":1}
+                        let newOppChoice = {"move":childNode.oppChoice,"allNodeValues":childNode.oppTotalValue,"numberOfNodes":1}
                         opponentChoiceValues.push(newOppChoice);
                     }
                 }
@@ -205,7 +202,6 @@ class ProjectMCTS2 {
             // get the best move on average
             for(let choice of agentChoiceValues){
                 let average = choice.allNodeValues / choice.numberOfNodes;
-                //console.log("final choices", choice.move, "-", average);
                 if(average > bestChoiceValue){
                     bestChoiceValue = average;
                     chosenMove = choice.move;
@@ -221,6 +217,7 @@ class ProjectMCTS2 {
             }
         }
 
+        this.oppLastChoiceValues = null;
         this.oppLastChoiceValues = opponentChoiceValuesMap;
 
         return chosenMove;
