@@ -7,7 +7,18 @@ After running the program, the agent will log in and become available for games.
 If you would like to swap to a different agent, modify the "agentChoice" variable at the top of the app.js file. Choices applicable to the project's use cases are listed in a comment above for your convenience.
 
 -------------------------------------------------------------
-Initial README below:
+Further instruction on how to challenge the bot are listed below, as taken from the instructions provided to evaluation participants.
+
+Please open your internet browser of choice and navigate to https://play.pokemonshowdown.com/. Click the “Choose name” button in the top-right corner in order to choose a display name – logging in is not required. Scroll down the page until you can see the “Find a user” button on the left side of the page. Please type in “ParentalBondBot” and hit “Open”. The page should offer you an option to challenge the bot, so please press the challenge button. This will open a small chat window and a challenge box.
+
+Please select the “format” dropdown and find “[Gen 4] Random Battle” (you will find this in the “Randomized Meta” tab).
+
+When you are ready to begin playing games, please press the “challenge” button within the chat window. Parental Bond Bot should accept your challenge and the game should start. In case you are unfamiliar with Pokémon gameplay, a brief instruction on how games are played is below:
+
+Every round, both you and your opponent are able to select one action. You are presented with two buttons – “Attack” and “Switch”. By clicking “Attack”, you can access your active Pokémon’s “moves”, or the actions it can take. By clicking “Switch”, you can choose another Pokémon in your party, swapping it with your active Pokémon. The goal is to defeat all of the opponent’s Pokémon before all of your own faint.
+
+-------------------------------------------------------------
+Initial README by Lee below:
 
 Pokemon Showdown AI Client
 
